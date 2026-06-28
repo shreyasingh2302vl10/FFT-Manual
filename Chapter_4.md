@@ -130,3 +130,52 @@ The `s_axis_config_tdata` vector consolidates all runtime configuration paramete
   * *Non-power-of-4 constraint (e.g., 512-pt):* The last stage bit growth is limited. Maximum value for the two MSBs can only be `00` or `01`. (e.g., `[1 2 2 2 2]` is valid, `[2 2 2 2 2]` is **invalid**).
 
 >  **Hardware Optimization Note:** All padded fields must be extended to the nearest 8-bit boundary. Driving unused padding bits to a constant logic level (like ground/`0`) optimizes FPGA routing and reduces resource consumption.
+## 🔧 AXI4-Stream Configuration Channel (`s_axis_config_tdata`) Architecture
+
+This section documents the structural mapping and bit-packing rules applied to the FFT/IFFT Core Configuration Channel (`s_axis_config_tdata`), adhering strictly to Xilinx/AMD Product Guide **PG109 (Figure 3: Configuration Channel TDATA Format)**.
+
+### 📐 Structural Layout Hierarchy (Right to Left / LSB to MSB)
+The configuration register follows a strict physical alignment boundary. When advanced features like the **Cyclic Prefix (CP)** are omitted or included, the vector dynamically adjusts (collapses) while maintaining individual sub-field padding.
+
+$$\text{[MSB]} \longleftarrow \text{Global PAD} \longleftarrow \text{SCALE\_SCH} \longleftarrow \text{FWD\_INV} \longleftarrow \text{CP\_LEN} \longleftarrow \text{NFFT} \longleftarrow \text{[LSB]}$$
+
+---
+
+### 🎛️ Field-by-Field Core Rules & Division Math
+
+#### 1. `NFFT` (Transform Size) | *Padded: Yes*
+* **Physical Width:** Dedicated 5 bits in the IP core.
+* **Behavior:** Holds the value $\log_2(\text{Transform Size})$. For an 8-point transform, $\log_2(8) = 3$ (`5'b00011`).
+* **Alignment Padding:** Must be padded internally to hit the nearest byte boundary (3 bits of zero extension), resulting in an 8-bit block: `00000011`.
+
+#### 2. `CP_LEN` (Cyclic Prefix Length) | *Padded: Yes (Left-Aligned)*
+* **Behavior:** The hardware samples the top `NFFT` bits from the MSB side of this field. 
+* **The Shift Phenomenon:** For a maximum core size of 128 ($\log_2(128) = 7\text{ bits}$), requesting a CP length of 4 (`3'b100`) requires left-aligning the bits inside the 7-bit container (`7'b1000000` = Decimal 64).
+* **Alignment Padding:** Padded with 1 leading zero to complete an 8-bit block: `01000000`.
+
+#### 3. `FWD_INV` (Direction Control) | *Padded: No*
+* **Behavior:** Contains exactly **1 bit per physical FFT channel** configured in the IP GUI.
+* `1` = Forward FFT (Receiver Mode)
+* `0` = Inverse FFT / IFFT (Transmitter Mode)
+
+#### 4. `SCALE_SCH` (Scaling Schedule) | *Padded: Whole Field*
+* **Pipelined Streaming Specifics:** Specified using **2 bits for every pair of Radix-2 stages**. 
+* **The Scaling Factor:**
+  * `2'b00` (0) $\rightarrow$ No scaling ($\div 1$)
+  * `2'b01` (1) $\rightarrow$ Right-shift by 1 bit ($\div 2$)
+  * `2'b10` (2) $\rightarrow$ Right-shift by 2 bits ($\div 4$)
+  * `2'b11` (3) $\rightarrow$ Right-shift by 3 bits ($\div 8$)
+* **Non-Power-of-4 Constraint:** For transforms like $N=8$ (3 stages $\rightarrow$ 2 pairs) or $N=512$ (9 stages $\rightarrow$ 5 pairs), the last stage is left un-paired. Since a standalone stage can only handle a max growth of 1 bit, the two MSBs of `SCALE_SCH` are strictly constrained to `00` or `01`.
+
+---
+
+### 💻 Validated Reference Configuration Words
+
+The following hex values represent verified control patterns for a **1-Channel, 8-Point Transform** with **No Cyclic Prefix**:
+
+#### 1. Receiver Side (8-Point Forward FFT)
+* **Active Payload (17 bits unaligned):** `[SCALE_SCH: 0101] [FWD_INV: 1] [NFFT: 00000011]`
+* **AXI Byte Realignment:** Requires a 24-bit container padded with 7 leading zeros (`7'b0000000`).
+```verilog
+// Bit Pattern: 24'b0000000_00000101_1_00000011
+s_axis_config_tdata <= 24'h000583;
