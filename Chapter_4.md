@@ -39,3 +39,16 @@ For an FFT point size $N = 32$ (Radix-4 Burst I/O, where $N$ is NOT a power of 4
   * Stage 2 (Radix-4): Scale by 4 $\rightarrow$ Binary `10`
   * Stage 3 (Radix-2): Scale by 2 $\rightarrow$ Binary `01` (Last Stage)
 * **Resulting Vector:** `[01 10 10]`
+## 3. Event Signals
+
+Real-time, non-AXI status signals updated cycle-by-cycle. If left unconnected, synthesis tools optimize them away.
+
+| Signal Name | Duration | Description / Trigger Condition |
+| :--- | :--- | :--- |
+| **`event_frame_started`** | 1 clock cycle | Asserts when the core begins processing a new frame. Used for frame synchronization/counting. |
+| **`event_tlast_missing`** | 1 clock cycle | **Error:** Upstream frame size is larger than core config (`tlast` missing at expected frame end). |
+| **`event_tlast_unexpected`** | 1 clock cycle | **Error:** Upstream frame size is smaller than core config (`tlast` arrived too early). |
+| **`event_fft_overflow`** | Every cycle | **Error:** Data overflow detected during scaled or pseudo floating-point operations. |
+| **`event_data_in_channel_halt`** | Every cycle | **Stall:** Input channel is empty when the core expects data. <br>• *Realtime:* Processing continues (frame corrupted).<br>• *Non-Realtime:* Core stalls safely until data arrives. |
+| **`event_data_out_channel_halt`** | Every cycle | **Stall:** Output channel buffer is full. Core halts safely. *(Non-Realtime mode only)*. |
+| **`event_status_channel_halt`** | Every cycle | **Stall:** Status channel buffer is full. Core halts safely. *(Non-Realtime mode only)*. |
