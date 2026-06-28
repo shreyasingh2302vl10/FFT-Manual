@@ -108,3 +108,25 @@ The Configuration Channel is an AXI4-Stream slave interface used to supply runti
 | **`s_axis_config_tready`** | 1 | Output (O) | Asserted by the FFT core when it is ready to accept the configuration packet. |
 
 *Design Note: The exact bit-width of `s_axis_config_tdata` dynamically adjusts in the AMD Vivado IDE depending on which configuration fields are enabled during IP generation.*
+## 7. Configuration Channel TDATA Fields Detailed Breakdown
+
+The `s_axis_config_tdata` vector consolidates all runtime configuration parameters. Below is the detailed structural mapping of each field within the vector:
+
+| Field Name | Bit Width | Padded to 8-bit? | Functional Description |
+| :--- | :--- | :--- | :--- |
+| **`NFFT`** | 5 bits | **Yes** | Specifies runtime transform size. Value = $\log_2(\text{point size})$. <br>*Example:* For a 1024-point max core, setting `NFFT` to 9 switches it to 512-point mode. |
+| **`CP_LEN`** | $\log_2(\text{max point size})$ | **Yes** | **Cyclic Prefix Length:** Defines the number of samples from the end of the transform to be prepended to the output frame. Range: `0` to `point size - 1`. |
+| **`FWD_INV`** | 1 bit per data channel | **No** | **Direction Control:** <br>• `1` = Forward FFT <br>• `0` = Inverse FFT (IFFT). <br>Bit 0 maps to Channel 0, Bit 1 to Channel 1, etc. |
+| **`SCALE_SCH`** | • $2 \times \text{stages}$ (Burst)<br>• $2 \times (\text{stages}/2)$ (Pipelined) | **Field level padding** | **Scaling Schedule:** Array of 2-bit values determining bit-shifts per stage to prevent calculation overflow. Ordered from **last stage to first stage** ($[ \text{Last} \dots \text{First} ]$). |
+
+---
+
+### Key Scaling Schedule Constraints & Examples
+
+* **Burst Architectures (Radix-4 / Radix-2):** Each stage gets 2 bits. 
+  * *Example (1024-pt Radix-4):* `[1 0 2 3 2]` defines shifts from last to first stage.
+* **Pipelined Streaming Architecture:** 2 bits are specified for every *pair* of Radix-2 stages.
+  * *Example (256-pt):* `[2 2 2 3]`
+  * *Non-power-of-4 constraint (e.g., 512-pt):* The last stage bit growth is limited. Maximum value for the two MSBs can only be `00` or `01`. (e.g., `[1 2 2 2 2]` is valid, `[2 2 2 2 2]` is **invalid**).
+
+>  **Hardware Optimization Note:** All padded fields must be extended to the nearest 8-bit boundary. Driving unused padding bits to a constant logic level (like ground/`0`) optimizes FPGA routing and reduces resource consumption.
