@@ -52,3 +52,23 @@ Real-time, non-AXI status signals updated cycle-by-cycle. If left unconnected, s
 | **`event_data_in_channel_halt`** | Every cycle | **Stall:** Input channel is empty when the core expects data. <br>• *Realtime:* Processing continues (frame corrupted).<br>• *Non-Realtime:* Core stalls safely until data arrives. |
 | **`event_data_out_channel_halt`** | Every cycle | **Stall:** Output channel buffer is full. Core halts safely. *(Non-Realtime mode only)*. |
 | **`event_status_channel_halt`** | Every cycle | **Stall:** Status channel buffer is full. Core halts safely. *(Non-Realtime mode only)*. |
+#  AXI4-Stream Considerations
+
+Except for clocking, resets, and event signals, all data movement in and out of the FFT core uses standard **AXI4-Stream channels**.
+
+## The Handshake Mechanism
+Data transfer happens exclusively when a synchronous handshake occurs between the source and the destination:
+* **`TVALID` (Source):** Asserted when valid data is present on the channel.
+* **`TREADY` (Destination):** Asserted when the receiver is ready to accept data.
+* **Transfer Condition:** A data word is transferred on the rising edge of `aclk` only when both `TVALID` and `TREADY` are **HIGH**.
+
+## Channel Composition
+Each stream channel bundles a handshake mechanism with a data payload:
+
+| Port | Type | Description |
+| :--- | :--- | :--- |
+| **`TVALID`** | Control | Indicates valid data payload is available. |
+| **`TREADY`** | Control | Indicates receiver readiness (flow control). |
+| **`TDATA`** | Payload | The actual mathematical data (operands/results). |
+| **`TLAST`** | Payload | Marks the boundary of the current frame (packet end). |
+| **`TUSER`** | Payload | Optional sideband information accompanying the data. |
