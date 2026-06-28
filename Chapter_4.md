@@ -173,13 +173,6 @@ $$\text{[MSB]} \longleftarrow \text{Global PAD} \longleftarrow \text{SCALE\_SCH}
 
 The following hex values represent verified control patterns for a **1-Channel, 8-Point Transform** with **No Cyclic Prefix**:
 
-#### 1. Receiver Side (8-Point Forward FFT)
-* **Active Payload (17 bits unaligned):** `[SCALE_SCH: 0101] [FWD_INV: 1] [NFFT: 00000011]`
-* **AXI Byte Realignment:** Requires a 24-bit container padded with 7 leading zeros (`7'b0000000`).
-```verilog
-// Bit Pattern: 24'b0000000_00000101_1_00000011
-s_axis_config_tdata <= 24'h000583;
-
 ## 📤 Data Output Channel (`m_axis_data_tdata`) Architecture
 
 The Data Output channel is an AXI4-Stream master interface that carries the real and imaginary results of the FFT transform on the `TDATA` vector, along with real-time per-sample status metadata on the `TUSER` vector.
