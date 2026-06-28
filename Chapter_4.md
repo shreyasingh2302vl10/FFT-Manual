@@ -179,3 +179,61 @@ The following hex values represent verified control patterns for a **1-Channel, 
 ```verilog
 // Bit Pattern: 24'b0000000_00000101_1_00000011
 s_axis_config_tdata <= 24'h000583;
+
+## 📤 Data Output Channel (`m_axis_data_tdata`) Architecture
+
+The Data Output channel is an AXI4-Stream master interface that carries the real and imaginary results of the FFT transform on the `TDATA` vector, along with real-time per-sample status metadata on the `TUSER` vector.
+
+---
+
+### 1. Structural Bit-Packing Layout (TDATA)
+Following the Xilinx standard complex data packing convention (**Figure 8 / Table 11**), the complex frequency-domain output samples ($XK$) are tightly packed into a single container where the **Imaginary component resides at the MSB side** and the **Real component resides at the LSB side**.
+
+$$\text{m\_axis\_data\_tdata[31:0]} = \underbrace{\text{XK\_IM [31:16]}}_{\text{Signed Imaginary Output (Q)}} \;\mid\; \underbrace{\text{XK\_RE [15:0]}}_{\text{Signed Real Output (I)}}$$
+
+* **No Sub-field Padding:** Since our system is configured for a **Single-Channel** environment with native **16-bit word widths**, each internal component natively aligns to a clean 8-bit byte boundary (16 bits = 2 bytes). Therefore, no extra padding or trailing bits are injected within the 32-bit `TDATA` stream.
+
+---
+
+### 2. Xilinx Sign-Extension Rule (Twos Complement)
+For configurations where the output bit-width does not cleanly finish on an 8-bit boundary (e.g., 12-bit or 14-bit core settings), the IP core enforces strict **Sign-Extension** instead of zero-padding to maintain mathematical polarity:
+* **Positive Samples (MSB = `0`):** Padded with leading zeros (`0000`).
+* **Negative Samples (MSB = `1`):** Padded with leading ones (`1111`) to preserve 2's complement value integrity.
+
+*Note: Since our system uses native 16-bit boundaries, the raw values are directly accessible without manual mask-shifting.*
+
+---
+
+### 3. Per-Sample Status Tracking (`m_axis_data_tuser`)
+To guarantee that tracking metadata never gets out of synchronization with the high-speed data stream, the `TUSER` vector runs completely parallel to `TDATA`:
+
+1. **`XK_INDEX` (Bits [2:0]):** A real-time hardware bin index counter. For our 8-point FFT, this loops continuously from `0` to `7` on consecutive clock cycles, explicitly identifying the current frequency bin ($f_0$ to $f_7$).
+2. **`OVFLO` (Bit [3]):** A 1-bit sticky overflow status flag. If the internal butterfly execution stages experience numerical clipping due to an aggressive or inadequate scaling schedule (`SCALE_SCH`), this bit asserts high (`1'b1`).
+
+---
+
+### 4. AXI4-Stream Output Handshake Control
+
+* **`m_axis_data_tvalid` (Output):** Asserted high by the FFT core when the frame processing is complete and valid frequency-domain samples are ready to be read.
+* **`m_axis_data_tready` (Input):** Controlled by our custom RTL state machine. Must be asserted high (`1'b1`) to allow the core to unload its pipeline registers. Dropping `tready` to `0` instantly freezes the core's output stage.
+* **`m_axis_data_tlast` (Output):** Asserted high by the core strictly during the transmission of the last sample of the frame (when `XK_INDEX = 7`), signaling downstream logic to close the frame packet.
+
+---
+
+### 💻 Verilog Real-Time Data Extraction
+
+```verilog
+// ⚠️ CRITICAL: Always declare extraction wires as SIGNED 
+// to ensure negative twos-complement numbers compile correctly.
+wire signed [15:0] fft_out_real;
+wire signed [15:0] fft_out_imag;
+wire [2:0]         fft_bin_index;
+wire               fft_overflow_flag;
+
+// Slicing TDATA into distinct Real (I) and Imaginary (Q) components
+assign fft_out_real      = m_axis_data_tdata[15:0];   // Lower 16-bits (LSB)
+assign fft_out_imag      = m_axis_data_tdata[31:16];  // Upper 16-bits (MSB)
+
+// Unpacking TUSER metadata for synchronization tracking
+assign fft_bin_index     = m_axis_data_tuser[2:0];    // Maps current frequency bin (0-7)
+assign fft_overflow_flag = m_axis_data_tuser[3];      // Hardware overflow warning indicator
