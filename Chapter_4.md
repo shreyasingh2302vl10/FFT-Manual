@@ -72,3 +72,25 @@ Each stream channel bundles a handshake mechanism with a data payload:
 | **`TDATA`** | Payload | The actual mathematical data (operands/results). |
 | **`TLAST`** | Payload | Marks the boundary of the current frame (packet end). |
 | **`TUSER`** | Payload | Optional sideband information accompanying the data. |
+
+## 5. Basic Handshake & Channel Rules
+
+### Protocol Handshake Logic
+* **Master (Source):** Controls `TVALID`, `TDATA`, `TUSER`, and `TLAST`.
+* **Slave (Receiver):** Controls `TREADY`.
+* **Execution:** A transfer happens **only** when `TVALID` and `TREADY` are simultaneously **TRUE** on a clock edge.
+
+---
+
+## AXI Channel Rules
+
+### 1. Data Alignment (Little Endian)
+* All sub-fields inside `TDATA` and `TUSER` are packed in **Little Endian** format (Bit 0 of any sub-field aligns with Bit 0 of the container vector).
+
+### 2. Dynamic Port Presence
+* Signals are physically generated **only if required** by the Vivado GUI configuration. 
+* *Example:* If FFT point-size is configured as fixed, the `NFFT` input field is completely excluded from the core interface.
+
+### 3. Byte Padding (8-bit Boundary)
+* The overall width of `TDATA` and `TUSER` buses must always be a **multiple of 8 bits**.
+* If concatenated fields do not naturally finish on an 8-bit boundary, the core automatically pads the most significant bits (MSBs) with zeros to round up.
