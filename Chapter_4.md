@@ -94,3 +94,17 @@ Each stream channel bundles a handshake mechanism with a data payload:
 ### 3. Byte Padding (8-bit Boundary)
 * The overall width of `TDATA` and `TUSER` buses must always be a **multiple of 8 bits**.
 * If concatenated fields do not naturally finish on an 8-bit boundary, the core automatically pads the most significant bits (MSBs) with zeros to round up.
+ 
+## 6. Configuration Channel
+
+The Configuration Channel is an AXI4-Stream slave interface used to supply runtime parameters to the FFT core.
+
+### Channel Interfaces (Table 4 Summary)
+
+| Port Name | Width (Bits) | Direction | Description |
+| :--- | :--- | :--- | :--- |
+| **`s_axis_config_tdata`** | Variable | Input (I) | Configuration payload packet. Contains fields: `CP_LEN`, `FWD_INV`, `NFFT`, and `SCALE_SCH`. |
+| **`s_axis_config_tvalid`** | 1 | Input (I) | Asserted by external master when valid configuration data is present on the bus. |
+| **`s_axis_config_tready`** | 1 | Output (O) | Asserted by the FFT core when it is ready to accept the configuration packet. |
+
+*Design Note: The exact bit-width of `s_axis_config_tdata` dynamically adjusts in the AMD Vivado IDE depending on which configuration fields are enabled during IP generation.*
