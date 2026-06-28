@@ -30,3 +30,12 @@ An active-LOW synchronous reset signal that re-initializes the entire core.
 | | `[10 10... 10]` | Radix-4 Burst / Pipelined (N is a power of 4) |
 | | `[01 10... 10]` | Radix-4 Burst / Pipelined (N is NOT a power of 4) |
 | | `[01 01... 01]` | Radix-2 Burst / Radix-2 Lite Burst |
+###  Numerical Example of SCALE_SCH
+
+For an FFT point size $N = 32$ (Radix-4 Burst I/O, where $N$ is NOT a power of 4):
+* **Total Scaling Required:** $1/32$
+* **Stage Breakdown ($32 = 4 \times 4 \times 2$):**
+  * Stage 1 (Radix-4): Scale by 4 $\rightarrow$ Binary `10`
+  * Stage 2 (Radix-4): Scale by 4 $\rightarrow$ Binary `10`
+  * Stage 3 (Radix-2): Scale by 2 $\rightarrow$ Binary `01` (Last Stage)
+* **Resulting Vector:** `[01 10 10]`
